@@ -1,0 +1,74 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f7; color: #1d1d1f; font-size: 15px; }
+
+.navbar { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 52px; background: #fff; border-bottom: 1px solid #e5e5e5; position: sticky; top: 0; z-index: 100; }
+.logo { font-size: 17px; font-weight: 600; }
+.market-switch { display: flex; gap: 4px; background: #f0f0f0; border-radius: 8px; padding: 3px; }
+.mkt-btn { border: none; background: transparent; padding: 4px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; color: #555; }
+.mkt-btn.active { background: #fff; color: #1d1d1f; font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+.container { max-width: 900px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+.sentiment-bar { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 10px; padding: 12px 16px; border: 1px solid #e5e5e5; }
+.s-label { font-size: 13px; color: #666; white-space: nowrap; }
+.s-track { flex: 1; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
+.s-fill { height: 100%; border-radius: 3px; background: #34c759; transition: width .6s ease; }
+.s-score { font-size: 15px; font-weight: 600; min-width: 30px; text-align: right; }
+.s-tag { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #e8faf0; color: #1a7f4b; white-space: nowrap; }
+
+.card { background: #fff; border-radius: 12px; padding: 16px; border: 1px solid #e5e5e5; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.card-header h2 { font-size: 16px; font-weight: 600; }
+.refresh-btn { font-size: 12px; padding: 4px 10px; border: 1px solid #e5e5e5; border-radius: 6px; background: transparent; cursor: pointer; color: #555; }
+.refresh-btn:hover { background: #f5f5f7; }
+
+.sector-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.sector-item { padding: 10px 12px; border-radius: 8px; border: 1px solid #e5e5e5; cursor: pointer; transition: background .15s; }
+.sector-item:hover { background: #f5f5f7; }
+.sector-name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+.sector-change { font-size: 15px; font-weight: 600; }
+.up { color: #e63946; } .dn { color: #2a9d8f; }
+
+.ai-input-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.ai-input-row input { flex: 1; min-width: 160px; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; }
+.ai-input-row input:focus { border-color: #0071e3; }
+.ai-input-row button { padding: 9px 18px; background: #0071e3; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.ai-input-row button:hover { background: #0077ed; }
+.ai-input-row button:disabled { background: #aaa; cursor: not-allowed; }
+
+.ai-result { font-size: 14px; line-height: 1.7; color: #333; white-space: pre-wrap; background: #f9f9fb; border-radius: 8px; padding: 12px; min-height: 20px; }
+.ai-result:empty { display: none; }
+
+.sentiment-detail { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; font-size: 13px; }
+.theme-tag { background: #eef2ff; color: #3451b2; padding: 3px 10px; border-radius: 12px; }
+.risk-tag  { background: #fff3ee; color: #c2410c; padding: 3px 10px; border-radius: 12px; }
+
+.news-list { display: flex; flex-direction: column; gap: 8px; }
+.news-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.news-item:last-child { border-bottom: none; }
+.news-title { font-size: 13px; color: #1d1d1f; flex: 1; }
+.news-title a { color: inherit; text-decoration: none; }
+.news-title a:hover { color: #0071e3; }
+.news-time { font-size: 11px; color: #999; white-space: nowrap; }
+
+.loading { color: #999; font-size: 13px; text-align: center; padding: 20px; }
+.error   { color: #e63946; font-size: 13px; text-align: center; padding: 10px; }
+
+.sector-price {
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+  margin-bottom: 2px;
+}
+
+.news-source {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #3451b2;
+  margin-right: 6px;
+  white-space: nowrap;
+  vertical-align: middle;
+}

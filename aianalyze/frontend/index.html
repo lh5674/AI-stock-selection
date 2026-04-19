@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 选股助手</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">AI 选股助手</div>
+    <div class="market-switch">
+      <button class="mkt-btn active" data-market="A股" onclick="switchMarket('A股', this)">A 股</button>
+      <button class="mkt-btn" data-market="美股" onclick="switchMarket('美股', this)">美 股</button>
+    </div>
+  </nav>
+
+  <main class="container">
+
+    <!-- 情绪条 -->
+    <section class="sentiment-bar" id="sentiment-bar">
+      <span class="s-label">市场情绪</span>
+      <div class="s-track"><div class="s-fill" id="s-fill"></div></div>
+      <span class="s-score" id="s-score">--</span>
+      <span class="s-tag" id="s-tag">加载中...</span>
+    </section>
+
+    <!-- 热点板块 -->
+    <section class="card">
+      <div class="card-header">
+        <h2>热点板块</h2>
+        <button class="refresh-btn" onclick="loadSectors()">刷新</button>
+      </div>
+      <div class="sector-grid" id="sector-grid">
+        <div class="loading">加载中...</div>
+      </div>
+    </section>
+
+    <!-- AI 自然语言选股 -->
+    <section class="card">
+      <div class="card-header"><h2>AI 自然语言选股</h2></div>
+      <div class="ai-input-row">
+        <input type="text" id="ai-query" placeholder="例如：帮我找低估值高成长的科技股" />
+        <button onclick="aiSelect()">AI 选股</button>
+      </div>
+      <div class="ai-result" id="ai-select-result"></div>
+    </section>
+
+    <!-- 个股诊断 -->
+    <section class="card">
+      <div class="card-header"><h2>个股 AI 诊断</h2></div>
+      <div class="ai-input-row">
+        <input type="text" id="stock-input" placeholder="A股输入代码如 600519，美股输入如 NVDA" />
+        <input type="text" id="stock-name-input" placeholder="股票名称（如 贵州茅台）" />
+        <button onclick="analyzeStock()">AI 诊断</button>
+      </div>
+      <div class="ai-result" id="ai-analyze-result"></div>
+    </section>
+
+    <!-- 情绪 + 新闻 -->
+    <section class="card">
+  <div class="card-header">
+    <h2>财经新闻</h2>
+    <button class="refresh-btn" onclick="refreshNews()">换一批</button>
+  </div>
+  <div class="news-list" id="news-list">
+    <div class="loading">加载中...</div>
+  </div>
+</section>
+
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
