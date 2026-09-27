@@ -1,75 +1,210 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI 选股助手</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="智选 Alpha：为个人投资者提供市场洞察、智能选股和个股研究的一站式 AI 投研工作台。">
+  <meta name="theme-color" content="#0a1020">
+  <title>智选 Alpha · AI 投研工作台</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <nav class="navbar">
-    <div class="logo">AI 选股助手</div>
-    <div class="market-switch">
-      <button class="mkt-btn active" data-market="A股" onclick="switchMarket('A股', this)">A 股</button>
-      <button class="mkt-btn" data-market="美股" onclick="switchMarket('美股', this)">美 股</button>
+  <div class="mobile-backdrop" id="mobile-backdrop" hidden></div>
+
+  <aside class="sidebar" id="sidebar" aria-label="主导航">
+    <a class="brand" href="/" aria-label="智选 Alpha 首页">
+      <span class="brand-mark">α</span>
+      <span><strong>智选</strong><small>ALPHA</small></span>
+    </a>
+
+    <nav class="side-nav">
+      <p class="nav-label">工作台</p>
+      <a class="nav-item active" href="#overview"><span>◫</span>市场总览</a>
+      <a class="nav-item" href="#ai-screener"><span>✦</span>AI 选股</a>
+      <a class="nav-item" href="#stock-lab"><span>⌁</span>个股研究</a>
+      <a class="nav-item" href="#watchlist"><span>☆</span>自选列表</a>
+      <a class="nav-item" href="#news"><span>▤</span>市场快讯</a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+    <div class="plan-card">
+      <span class="plan-kicker">PRO 工作区</span>
+      <strong>释放完整 AI 投研能力</strong>
+      <p>深度报告、更多自选与实时提醒。</p>
+      <button class="secondary-button full" id="view-plans" type="button">查看方案</button>
     </div>
-  </nav>
+    <div class="sidebar-user">
+      <span class="avatar">访</span>
+      <span><strong>访客工作区</strong><small>免费体验</small></span>
+      <button class="icon-button" type="button" aria-label="账户设置">•••</button>
+    </div>
+  </aside>
 
-  <main class="container">
-
-    <!-- 情绪条 -->
-    <section class="sentiment-bar" id="sentiment-bar">
-      <span class="s-label">市场情绪</span>
-      <div class="s-track"><div class="s-fill" id="s-fill"></div></div>
-      <span class="s-score" id="s-score">--</span>
-      <span class="s-tag" id="s-tag">加载中...</span>
-    </section>
-
-    <!-- 热点板块 -->
-    <section class="card">
-      <div class="card-header">
-        <h2>热点板块</h2>
-        <button class="refresh-btn" onclick="loadSectors()">刷新</button>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="icon-button mobile-menu" id="mobile-menu" type="button" aria-label="打开导航">☰</button>
+      <div class="global-search">
+        <span aria-hidden="true">⌕</span>
+        <input id="global-search" type="search" placeholder="搜索股票代码或名称" autocomplete="off">
+        <kbd>/</kbd>
       </div>
-      <div class="sector-grid" id="sector-grid">
-        <div class="loading">加载中...</div>
+      <div class="topbar-actions">
+        <span class="connection-status" id="connection-status"><i></i>正在连接</span>
+        <button class="icon-button" type="button" aria-label="通知">◌</button>
+        <button class="primary-button compact" id="top-upgrade" type="button">升级 Pro</button>
       </div>
-    </section>
+    </header>
 
-    <!-- AI 自然语言选股 -->
-    <section class="card">
-      <div class="card-header"><h2>AI 自然语言选股</h2></div>
-      <div class="ai-input-row">
-        <input type="text" id="ai-query" placeholder="例如：帮我找低估值高成长的科技股" />
-        <button onclick="aiSelect()">AI 选股</button>
-      </div>
-      <div class="ai-result" id="ai-select-result"></div>
-    </section>
+    <main class="workspace">
+      <section class="page-heading" id="overview">
+        <div>
+          <p class="eyebrow" id="market-date">市场工作台</p>
+          <h1>早上好，今天关注什么？</h1>
+          <p>用实时市场信号和 AI 洞察，更快完成你的投资研究。</p>
+        </div>
+        <div class="market-switch" role="group" aria-label="选择市场">
+          <button class="market-button active" data-market="A股" type="button">A 股</button>
+          <button class="market-button" data-market="美股" type="button">美 股</button>
+        </div>
+      </section>
 
-    <!-- 个股诊断 -->
-    <section class="card">
-      <div class="card-header"><h2>个股 AI 诊断</h2></div>
-      <div class="ai-input-row">
-        <input type="text" id="stock-input" placeholder="A股输入代码如 600519，美股输入如 NVDA" />
-        <input type="text" id="stock-name-input" placeholder="股票名称（如 贵州茅台）" />
-        <button onclick="analyzeStock()">AI 诊断</button>
-      </div>
-      <div class="ai-result" id="ai-analyze-result"></div>
-    </section>
+      <section class="metric-grid" aria-label="市场摘要">
+        <article class="metric-card sentiment-card">
+          <div class="metric-top"><span>市场情绪</span><span class="live-pill">AI</span></div>
+          <div class="sentiment-row">
+            <strong id="s-score">--</strong>
+            <span class="sentiment-label" id="s-tag">分析中</span>
+          </div>
+          <div class="sentiment-track"><span id="s-fill"></span></div>
+          <p id="sentiment-summary">正在读取最新财经信号…</p>
+        </article>
+        <article class="metric-card">
+          <div class="metric-top"><span>市场覆盖</span><span class="metric-icon blue">◎</span></div>
+          <strong class="metric-value" id="coverage-value">2</strong>
+          <p>A 股与美股双市场研究</p>
+          <span class="metric-foot positive">行情数据已连接</span>
+        </article>
+        <article class="metric-card">
+          <div class="metric-top"><span>自选股票</span><span class="metric-icon violet">☆</span></div>
+          <strong class="metric-value" id="watchlist-count">0</strong>
+          <p>浏览器本地保存</p>
+          <a href="#watchlist" class="metric-link">管理自选 →</a>
+        </article>
+        <article class="metric-card">
+          <div class="metric-top"><span>AI 研究引擎</span><span class="metric-icon amber">✦</span></div>
+          <strong class="metric-value small" id="ai-status">检测中</strong>
+          <p id="ai-status-copy">正在检查服务配置</p>
+          <span class="metric-foot" id="ai-model">Qwen Plus</span>
+        </article>
+      </section>
 
-    <!-- 情绪 + 新闻 -->
-    <section class="card">
-  <div class="card-header">
-    <h2>财经新闻</h2>
-    <button class="refresh-btn" onclick="refreshNews()">换一批</button>
+      <section class="dashboard-grid">
+        <article class="panel market-panel">
+          <header class="panel-header">
+            <div><span class="section-kicker">MARKET PULSE</span><h2 id="market-panel-title">A 股市场热度</h2></div>
+            <button class="text-button" id="refresh-market" type="button">刷新数据</button>
+          </header>
+          <div class="sector-grid" id="sector-grid" aria-live="polite">
+            <div class="skeleton-grid" aria-label="加载中">
+              <i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+          </div>
+          <div class="sector-detail" id="sector-detail" hidden>
+            <div class="sector-detail-head">
+              <div><span class="section-kicker">行业成分</span><h3 id="sector-detail-title"></h3></div>
+              <button class="icon-button" id="close-sector-detail" type="button" aria-label="关闭">×</button>
+            </div>
+            <div class="constituent-list" id="constituent-list"></div>
+          </div>
+        </article>
+
+        <article class="panel watchlist-panel" id="watchlist">
+          <header class="panel-header">
+            <div><span class="section-kicker">WATCHLIST</span><h2>我的自选</h2></div>
+            <button class="icon-button bordered" id="add-watchlist" type="button" aria-label="添加自选">＋</button>
+          </header>
+          <div class="watchlist" id="watchlist-items" aria-live="polite"></div>
+          <p class="panel-hint">数据仅供研究参考，可能存在延迟。</p>
+        </article>
+
+        <article class="panel ai-panel" id="ai-screener">
+          <header class="panel-header">
+            <div><span class="section-kicker accent">AI SCREENER</span><h2>用自然语言发现机会</h2></div>
+            <span class="pro-pill">PRO</span>
+          </header>
+          <p class="panel-description">描述你的策略偏好，AI 会结合当前市场热度整理研究方向。</p>
+          <div class="prompt-suggestions" id="prompt-suggestions">
+            <button type="button">低估值、高成长的科技股</button>
+            <button type="button">近期强势且风险可控</button>
+            <button type="button">适合长期关注的行业龙头</button>
+          </div>
+          <div class="composer">
+            <textarea id="ai-query" rows="3" maxlength="500" placeholder="例如：帮我找现金流健康、估值合理并且近期趋势向上的公司…"></textarea>
+            <div class="composer-actions">
+              <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 发送</span>
+              <button class="primary-button" id="ai-select-button" type="button"><span>✦</span> 开始 AI 选股</button>
+            </div>
+          </div>
+          <div class="ai-result" id="ai-select-result" hidden aria-live="polite"></div>
+        </article>
+
+        <article class="panel stock-panel" id="stock-lab">
+          <header class="panel-header">
+            <div><span class="section-kicker">STOCK LAB</span><h2>个股 AI 诊断</h2></div>
+            <span class="research-badge">研究模式</span>
+          </header>
+          <form class="stock-form" id="stock-form">
+            <label><span>股票代码</span><input id="stock-input" maxlength="12" placeholder="600519 / NVDA" required></label>
+            <label><span>股票名称</span><input id="stock-name-input" maxlength="80" placeholder="贵州茅台 / NVIDIA"></label>
+            <button class="primary-button" id="analyze-button" type="submit">生成诊断</button>
+          </form>
+          <div class="stock-preview" id="stock-preview" hidden>
+            <div class="stock-preview-head">
+              <div><span id="preview-symbol">--</span><strong id="preview-price">--</strong></div>
+              <span id="preview-change">--</span>
+            </div>
+            <svg id="stock-chart" viewBox="0 0 640 160" role="img" aria-label="近期收盘价走势"></svg>
+          </div>
+          <div class="ai-result" id="ai-analyze-result" hidden aria-live="polite"></div>
+        </article>
+
+        <article class="panel news-panel" id="news">
+          <header class="panel-header">
+            <div><span class="section-kicker">MARKET BRIEF</span><h2>财经快讯</h2></div>
+            <button class="text-button" id="refresh-news" type="button">换一批</button>
+          </header>
+          <div class="news-list" id="news-list" aria-live="polite">
+            <div class="loading-state"><span class="spinner"></span>正在聚合市场快讯</div>
+          </div>
+        </article>
+      </section>
+
+      <footer class="risk-footer">
+        <strong>风险提示</strong>
+        <p>本产品提供的数据、AI 分析与内容仅用于信息和研究，不构成任何投资建议、承诺或收益保证。市场有风险，投资需谨慎。</p>
+        <span>© 2026 智选 Alpha</span>
+      </footer>
+    </main>
   </div>
-  <div class="news-list" id="news-list">
-    <div class="loading">加载中...</div>
-  </div>
-</section>
 
-  </main>
+  <dialog class="pricing-dialog" id="pricing-dialog">
+    <form method="dialog" class="dialog-shell">
+      <button class="dialog-close" value="cancel" aria-label="关闭">×</button>
+      <div class="dialog-heading">
+        <span class="section-kicker accent">CHOOSE YOUR PLAN</span>
+        <h2>为你的研究方式选择方案</h2>
+        <p>透明定价，随时升级或取消。</p>
+      </div>
+      <div class="pricing-grid">
+        <article><span>体验版</span><h3>¥0<small>/月</small></h3><p>市场概览与基础自选</p><ul><li>双市场行情</li><li>5 个自选标的</li><li>财经快讯</li></ul><button value="cancel" class="secondary-button full">当前方案</button></article>
+        <article class="featured"><span class="popular">推荐</span><span>专业版</span><h3>¥69<small>/月</small></h3><p>为活跃个人投资者打造</p><ul><li>不限 AI 选股研究</li><li>完整个股诊断</li><li>50 个自选标的</li></ul><button value="cancel" class="primary-button full plan-interest" data-plan="专业版">申请试用</button></article>
+        <article><span>团队版</span><h3>定制</h3><p>面向投研团队与机构</p><ul><li>团队工作区</li><li>API 与数据导出</li><li>专属支持</li></ul><button value="cancel" class="secondary-button full plan-interest" data-plan="团队版">联系销售</button></article>
+      </div>
+      <p class="pricing-note">当前为产品预览，正式计费与账户系统将在商业发布前接入。</p>
+    </form>
+  </dialog>
 
-  <script src="/static/app.js"></script>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/static/app.js" defer></script>
 </body>
 </html>

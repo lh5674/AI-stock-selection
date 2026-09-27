@@ -1,10 +1,24 @@
 import requests
 import random
+from datetime import datetime
 from bs4 import BeautifulSoup
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
 }
+
+
+def _format_timestamp(value):
+    """Return compact local time for Unix timestamps, preserving RSS date strings."""
+    if value in (None, ""):
+        return ""
+    try:
+        timestamp = float(value)
+        if timestamp > 10_000_000_000:
+            timestamp /= 1000
+        return datetime.fromtimestamp(timestamp).astimezone().strftime("%m-%d %H:%M")
+    except (TypeError, ValueError, OSError, OverflowError):
+        return str(value).strip()[:25]
 
 def get_finance_news(limit: int = 5):
     """
@@ -26,7 +40,7 @@ def get_finance_news(limit: int = 5):
         for item in data.get("result", {}).get("data", []):
             title = item.get("title", "").strip()
             url   = item.get("url", "#")
-            time  = item.get("ctime", "")
+            time  = _format_timestamp(item.get("ctime", ""))
             if title:
                 all_news.append({"title": title, "time": time, "url": url, "source": "新浪财经"})
         print(f"[news] 新浪财经 OK — {len(all_news)} items")

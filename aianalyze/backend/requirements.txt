@@ -1,9 +1,8 @@
-fastapi
-uvicorn[standard]
-akshare
-requests
-pandas
-anthropic
-beautifulsoup4
-httpx
-python-dotenv
+fastapi>=0.116,<1
+uvicorn[standard]>=0.35,<1
+akshare>=1.18,<2
+requests>=2.32,<3
+dashscope>=1.23,<2
+beautifulsoup4>=4.13,<5
+lxml>=5,<7
+python-dotenv>=1.1,<2

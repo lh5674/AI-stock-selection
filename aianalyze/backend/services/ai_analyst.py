@@ -1,27 +1,51 @@
 import os
 import json
 import re
+from http import HTTPStatus
+
 from dotenv import load_dotenv
-import dashscope
 from dashscope import Generation
 
 load_dotenv()
 
-dashscope.api_key = os.environ.get("DASHSCOPE_API_KEY")
 
+class AIConfigurationError(RuntimeError):
+    """Raised when the AI service is not configured."""
+
+class AIServiceError(RuntimeError):
+    """Raised when DashScope rejects or fails a request."""
 
 def _call_qwen(prompt: str, max_tokens: int = 1000) -> str:
     """统一调用千问 API"""
-    response = Generation.call(
-        model="qwen-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
-        result_format="message",
-    )
-    if response.status_code == 200:
-        return response.output.choices[0].message.content
-    else:
-        raise Exception(f"Qwen API error: {response.code} — {response.message}")
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "").strip()
+    if not api_key:
+        raise AIConfigurationError(
+            "AI 功能尚未配置，请设置 DASHSCOPE_API_KEY。"
+        )
+
+    try:
+        response = Generation.call(
+            api_key=api_key,
+            model=os.environ.get("DASHSCOPE_MODEL", "qwen-plus"),
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            result_format="message",
+        )
+    except Exception as exc:
+        raise AIServiceError("AI 服务暂时不可用，请稍后重试。") from exc
+
+    if response.status_code != HTTPStatus.OK:
+        raise AIServiceError(
+            f"AI 服务请求失败（{getattr(response, 'code', response.status_code)}）。"
+        )
+
+    try:
+        content = response.output.choices[0].message.content
+    except (AttributeError, IndexError, TypeError) as exc:
+        raise AIServiceError("AI 服务返回了无法识别的响应。") from exc
+    if not content:
+        raise AIServiceError("AI 服务返回了空响应。")
+    return content
 
 
 def analyze_stock(stock_name: str, market: str, history: list, news: list) -> str:
@@ -66,7 +90,7 @@ def ai_select_stocks(user_query: str, market: str, sector_data: list) -> str:
 用户需求: {user_query}
 目标市场: {market}
 
-当前热点板块数据:
+当前市场热度数据:
 {sector_info}
 
 请：
@@ -106,7 +130,7 @@ sentiment_score范围0-100（0=极度悲观，50=中性，100=极度乐观）"""
     if match:
         try:
             return json.loads(match.group())
-        except:
+        except json.JSONDecodeError:
             pass
     return {
         "sentiment_score": 50,

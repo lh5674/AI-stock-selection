@@ -1,180 +1,320 @@
-import requests
-import time
+import math
 import random
-from datetime import datetime
+import re
+import time
+from datetime import datetime, timedelta
 from threading import Lock
+from urllib.parse import quote
 
-# ── 关键：trust_env=True，走系统代理 ─────────────────────────
+import requests
+
+
+class MarketDataError(RuntimeError):
+    """Raised when an upstream market-data provider is unavailable."""
+
+
 _session = requests.Session()
-_session.trust_env = True   # 必须是 True！
+_session.trust_env = True
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 Chrome/120.0.0.0"
+    ),
     "Accept": "application/json",
 }
 
 NAME_CN = {
-    "NVDA":"英伟达","MSFT":"微软","GOOGL":"谷歌","META":"Meta",
-    "AMD":"超微半导体","TSLA":"特斯拉","AAPL":"苹果","AMZN":"亚马逊",
-    "BABA":"阿里巴巴","BIDU":"百度","JD":"京东","PDD":"拼多多",
-    "NTES":"网易","BILI":"哔哩哔哩","NIO":"蔚来","XPEV":"小鹏",
-    "LI":"理想汽车","TCOM":"携程",
+    "NVDA": "英伟达",
+    "MSFT": "微软",
+    "GOOGL": "谷歌",
+    "META": "Meta",
+    "AMD": "超微半导体",
+    "TSLA": "特斯拉",
+    "AAPL": "苹果",
+    "AMZN": "亚马逊",
 }
 
-# ── TTL 缓存 60秒 ─────────────────────────────────────────────
 _cache = {}
 _cache_lock = Lock()
 
+
 def _cache_get(key):
     with _cache_lock:
-        v = _cache.get(key)
-        if v and v["expire"] > time.time():
-            print(f"[cache] hit: {key}")
-            return v["data"]
+        value = _cache.get(key)
+        if value and value["expire"] > time.time():
+            return value["data"]
     return None
+
 
 def _cache_set(key, data, ttl=60):
     with _cache_lock:
         _cache[key] = {"data": data, "expire": time.time() + ttl}
 
 
-# ══════════════════════════════════════════════════════════════
-# 核心: Yahoo v8/finance/chart — 已确认新加坡可用
-# ══════════════════════════════════════════════════════════════
-def _yf_quote_single(symbol: str) -> dict | None:
-    """用 chart meta 字段拿实时价格"""
-    for base in ["query1", "query2"]:   # query1 失败自动试 query2
+def _get_akshare():
+    # Lazy import keeps app startup quick and makes provider failures isolated.
+    import akshare as ak
+
+    return ak
+
+
+def _number(value, default=0.0):
+    try:
+        result = float(value)
+        return default if math.isnan(result) or math.isinf(result) else result
+    except (TypeError, ValueError):
+        return default
+
+
+def _integer(value, default=0):
+    return int(_number(value, default))
+
+
+def _validate_a_code(code: str) -> str:
+    normalized = code.strip()
+    if not re.fullmatch(r"\d{6}", normalized):
+        raise ValueError("A股代码必须是 6 位数字。")
+    return normalized
+
+
+def _validate_us_symbol(symbol: str) -> str:
+    normalized = symbol.strip().upper()
+    if not re.fullmatch(r"[A-Z][A-Z0-9.-]{0,9}", normalized):
+        raise ValueError("美股代码格式不正确。")
+    return normalized
+
+
+def _yf_chart(symbol: str, range_value: str) -> dict:
+    safe_symbol = quote(_validate_us_symbol(symbol), safe="")
+    last_error = None
+    for host in ("query1", "query2"):
         try:
-            url = f"https://{base}.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
-            r = _session.get(url, headers=HEADERS, timeout=8)
-            if r.status_code != 200:
-                continue
-            meta  = r.json().get("chart", {}).get("result", [{}])[0].get("meta", {})
-            price = meta.get("regularMarketPrice") or meta.get("previousClose")
-            prev  = meta.get("previousClose") or meta.get("chartPreviousClose")
-            if not price:
-                continue
-            change = round((price - prev) / prev * 100, 2) if prev else 0.0
-            return {
-                "symbol":     symbol.upper(),
-                "name":       NAME_CN.get(symbol.upper(), symbol),
-                "price":      round(float(price), 2),
-                "change_pct": change,
-            }
-        except Exception as e:
-            print(f"[yf_quote] {symbol} {base} failed: {type(e).__name__}")
-    return None
+            response = _session.get(
+                f"https://{host}.finance.yahoo.com/v8/finance/chart/{safe_symbol}",
+                params={"interval": "1d", "range": range_value},
+                headers=HEADERS,
+                timeout=10,
+            )
+            response.raise_for_status()
+            chart = response.json().get("chart", {})
+            if chart.get("error"):
+                raise MarketDataError("行情代码不存在或暂时不可用。")
+            results = chart.get("result") or []
+            if results:
+                return results[0]
+        except (requests.RequestException, ValueError, KeyError) as exc:
+            last_error = exc
+    raise MarketDataError("美股行情服务暂时不可用，请稍后重试。") from last_error
+
+
+def _yf_quote_single(symbol: str) -> dict:
+    normalized = _validate_us_symbol(symbol)
+    chart = _yf_chart(normalized, "5d")
+    meta = chart.get("meta", {})
+    price = meta.get("regularMarketPrice") or meta.get("previousClose")
+    previous = meta.get("previousClose") or meta.get("chartPreviousClose")
+    if price is None:
+        raise MarketDataError("美股行情缺少价格数据。")
+    change = ((price - previous) / previous * 100) if previous else 0.0
+    return {
+        "symbol": normalized,
+        "name": NAME_CN.get(normalized, normalized),
+        "price": round(float(price), 2),
+        "change_pct": round(change, 2),
+    }
 
 
 def _yf_kline(symbol: str) -> list:
-    """用 chart 接口拿近30日K线"""
-    for base in ["query1", "query2"]:
-        try:
-            url = f"https://{base}.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1mo"
-            r = _session.get(url, headers=HEADERS, timeout=10)
-            if r.status_code != 200:
-                continue
-            chart   = r.json().get("chart", {}).get("result", [{}])[0]
-            ts      = chart.get("timestamp", [])
-            closes  = chart.get("indicators", {}).get("quote", [{}])[0].get("close", [])
-            volumes = chart.get("indicators", {}).get("quote", [{}])[0].get("volume", [])
-            history = [
-                {
-                    "date":   datetime.fromtimestamp(t).strftime("%Y-%m-%d"),
-                    "close":  round(float(c), 2) if c else 0,
-                    "volume": int(v) if v else 0,
-                }
-                for t, c, v in zip(ts, closes, volumes) if c
-            ]
-            if history:
-                return history
-        except Exception as e:
-            print(f"[yf_kline] {symbol} {base} failed: {e}")
-    return []
+    chart = _yf_chart(symbol, "1mo")
+    timestamps = chart.get("timestamp", [])
+    quote_data = (chart.get("indicators", {}).get("quote") or [{}])[0]
+    closes = quote_data.get("close", [])
+    volumes = quote_data.get("volume", [])
+    return [
+        {
+            "date": datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d"),
+            "close": round(float(close), 2),
+            "volume": _integer(volume),
+        }
+        for timestamp, close, volume in zip(timestamps, closes, volumes)
+        if close is not None
+    ]
 
 
 def _batch_quotes(symbols: list) -> list:
-    """逐个拉取，加小延迟避免限流"""
     results = []
     order = symbols[:]
     random.shuffle(order)
-    for sym in order:
-        q = _yf_quote_single(sym)
-        if q:
-            results.append(q)
-        time.sleep(0.15)
+    for symbol in order:
+        try:
+            results.append(_yf_quote_single(symbol))
+        except (MarketDataError, ValueError):
+            continue
+        time.sleep(0.1)
     return results
 
 
-# ══════════════════════════════════════════════════════════════
-# 对外接口
-# ══════════════════════════════════════════════════════════════
 def get_us_movers() -> list:
     cached = _cache_get("us_movers")
-    if cached:
+    if cached is not None:
         return cached
-    symbols = ["NVDA","MSFT","GOOGL","META","AMD","TSLA","AAPL","AMZN"]
+    symbols = ["NVDA", "MSFT", "GOOGL", "META", "AMD", "TSLA", "AAPL", "AMZN"]
     results = _batch_quotes(symbols)
-    results.sort(key=lambda x: x["change_pct"], reverse=True)
-    if results:
-        _cache_set("us_movers", results, ttl=60)
-    print(f"[us_movers] OK — {len(results)}/{len(symbols)}")
+    if not results:
+        raise MarketDataError("美股行情服务暂时不可用，请稍后重试。")
+    results.sort(key=lambda item: item["change_pct"], reverse=True)
+    _cache_set("us_movers", results, ttl=60)
     return results
 
 
 def get_hot_sectors_a() -> list:
     cached = _cache_get("sectors_a")
-    if cached:
+    if cached is not None:
         return cached
-    symbols = ["BABA","BIDU","JD","PDD","NTES","BILI","NIO","XPEV","LI","TCOM"]
-    results = _batch_quotes(symbols)
-    data = sorted(
-        [
+    akshare = _get_akshare()
+    try:
+        frame = akshare.stock_board_industry_name_em()
+        records = frame.to_dict("records")
+        data = [
             {
-                "板块名称": q["name"],
-                "涨跌幅":   q["change_pct"],
-                "最新价":   q["price"],
-                "symbol":   q["symbol"],
+                "板块名称": str(row.get("板块名称", "")).strip(),
+                "涨跌幅": round(_number(row.get("涨跌幅")), 2),
+                "最新价": round(_number(row.get("最新价")), 2),
+                "name": str(row.get("板块名称", "")).strip(),
+                "change_pct": round(_number(row.get("涨跌幅")), 2),
+                "price": round(_number(row.get("最新价")), 2),
+                "kind": "industry",
             }
-            for q in results
-        ],
-        key=lambda x: x["涨跌幅"], reverse=True
-    )
-    if data:
-        _cache_set("sectors_a", data, ttl=60)
-    print(f"[sectors_a] OK — {len(data)}/{len(symbols)}")
-    return data
+            for row in records
+            if str(row.get("板块名称", "")).strip()
+        ]
+        data.sort(key=lambda item: item["涨跌幅"], reverse=True)
+    except Exception:
+        # Eastmoney can be unavailable on some regional proxies. Sina's full
+        # A-share snapshot is slower but provides a genuine, independent
+        # fallback. Rank it by turnover to represent market attention.
+        try:
+            frame = akshare.stock_zh_a_spot()
+            records = frame.to_dict("records")
+            active = sorted(
+                records,
+                key=lambda row: _number(row.get("成交额")),
+                reverse=True,
+            )[:30]
+            data = [
+                {
+                    "板块名称": str(row.get("名称", "")).strip(),
+                    "涨跌幅": round(_number(row.get("涨跌幅")), 2),
+                    "最新价": round(_number(row.get("最新价")), 2),
+                    "name": str(row.get("名称", "")).strip(),
+                    "change_pct": round(_number(row.get("涨跌幅")), 2),
+                    "price": round(_number(row.get("最新价")), 2),
+                    "symbol": re.sub(r"^[a-zA-Z]+", "", str(row.get("代码", ""))),
+                    "kind": "stock",
+                }
+                for row in active
+                if row.get("代码") and row.get("名称")
+            ]
+        except Exception as exc:
+            raise MarketDataError("A股市场热度数据暂时不可用，请稍后重试。") from exc
+    result = data[:12]
+    if not result:
+        raise MarketDataError("A股行业板块数据暂时为空。")
+    _cache_set("sectors_a", result, ttl=120)
+    return result
+
+
+def get_sector_stocks(sector_name: str) -> list:
+    normalized = sector_name.strip()
+    if not normalized or len(normalized) > 40:
+        raise ValueError("板块名称格式不正确。")
+    cache_key = f"sector:{normalized}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        frame = _get_akshare().stock_board_industry_cons_em(symbol=normalized)
+        records = frame.to_dict("records")
+        data = [
+            {
+                "code": str(row.get("代码", "")).zfill(6),
+                "name": str(row.get("名称", "")).strip(),
+                "price": round(_number(row.get("最新价")), 2),
+                "change_pct": round(_number(row.get("涨跌幅")), 2),
+                "volume": _integer(row.get("成交量")),
+            }
+            for row in records
+            if row.get("代码") and row.get("名称")
+        ]
+    except Exception as exc:
+        raise MarketDataError("板块成分股数据暂时不可用，请稍后重试。") from exc
+    data.sort(key=lambda item: item["change_pct"], reverse=True)
+    result = data[:30]
+    _cache_set(cache_key, result, ttl=120)
+    return result
+
+
+def get_stock_detail_a(code: str) -> dict:
+    normalized = _validate_a_code(code)
+    cache_key = f"a_kline:{normalized}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return {"code": normalized, "history": cached}
+
+    end = datetime.now()
+    start = end - timedelta(days=90)
+    akshare = _get_akshare()
+    try:
+        frame = akshare.stock_zh_a_hist(
+            symbol=normalized,
+            period="daily",
+            start_date=start.strftime("%Y%m%d"),
+            end_date=end.strftime("%Y%m%d"),
+            adjust="qfq",
+            timeout=10,
+        )
+        records = frame.to_dict("records")
+    except Exception:
+        prefix = "sh" if normalized.startswith("6") else "bj" if normalized.startswith(("4", "8", "9")) else "sz"
+        try:
+            frame = akshare.stock_zh_a_daily(
+                symbol=f"{prefix}{normalized}",
+                start_date=start.strftime("%Y%m%d"),
+                end_date=end.strftime("%Y%m%d"),
+                adjust="qfq",
+            )
+            records = frame.to_dict("records")
+        except Exception as exc:
+            raise MarketDataError("A股历史行情暂时不可用，请稍后重试。") from exc
+
+    history = [
+            {
+                "date": str(row.get("日期", row.get("date", "")))[:10],
+                "open": round(_number(row.get("开盘", row.get("open"))), 2),
+                "high": round(_number(row.get("最高", row.get("high"))), 2),
+                "low": round(_number(row.get("最低", row.get("low"))), 2),
+                "close": round(_number(row.get("收盘", row.get("close"))), 2),
+                "volume": _integer(row.get("成交量", row.get("volume"))),
+            }
+            for row in records
+            if row.get("日期", row.get("date")) is not None
+            and row.get("收盘", row.get("close")) is not None
+        ][-30:]
+    if not history:
+        raise MarketDataError("未找到该 A 股代码的近期行情。")
+    _cache_set(cache_key, history, ttl=300)
+    return {"code": normalized, "history": history}
 
 
 def get_stock_detail_us(symbol: str) -> dict:
-    cache_key = f"kline:{symbol}"
+    normalized = _validate_us_symbol(symbol)
+    cache_key = f"us_kline:{normalized}"
     cached = _cache_get(cache_key)
-    if cached:
-        return {"symbol": symbol, "history": cached}
-    history = _yf_kline(symbol)
-    if history:
-        _cache_set(cache_key, history, ttl=300)
-    print(f"[kline] {symbol} OK — {len(history)} days")
-    return {"symbol": symbol, "history": history}
-
-
-def get_sector_stocks(sector_name: str):
-    return []
-
-def get_stock_detail_a(code: str):
-    return {"history": []}
-
-
-# ── 自测 ──────────────────────────────────────────────────────
-if __name__ == "__main__":
-    print("\n===== 美股实时 =====")
-    for s in get_us_movers():
-        print(f"  {s['symbol']:6} {s['name']:10} ${s['price']:>9.2f}  {s['change_pct']:+.2f}%")
-
-    print("\n===== 中概股实时 =====")
-    for s in get_hot_sectors_a():
-        print(f"  {s['symbol']:6} {s['板块名称']:10} ${s['最新价']:>9.2f}  {s['涨跌幅']:+.2f}%")
-
-    print("\n===== NVDA K线 =====")
-    for d in get_stock_detail_us("NVDA")["history"][-3:]:
-        print(f"  {d['date']}  ${d['close']}")
+    if cached is not None:
+        return {"symbol": normalized, "history": cached}
+    history = _yf_kline(normalized)
+    if not history:
+        raise MarketDataError("未找到该美股代码的近期行情。")
+    _cache_set(cache_key, history, ttl=300)
+    return {"symbol": normalized, "history": history}
